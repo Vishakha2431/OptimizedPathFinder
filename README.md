@@ -33,12 +33,6 @@
 ---
 
 ## 🏃‍♂️ Quick Start
-
-### 1. Clone & Install
-```bash
-git clone https://github.com/harshitsingh4321/indore-route-planner.git
-cd indore-route-planner
-
 # Backend
 cd backend && npm install
 
@@ -115,8 +109,8 @@ Uses **Dijkstra's Algorithm** to find:
 
 ## 🚀 Deployment
 
-- **Frontend**: Deploy to Vercel : https://indore-metro.vercel.app
-- **Backend**: Deploy to Render : https://indore-metro.onrender.com
+- **Frontend**: Deploy to Vercel 
+- **Backend**: Deploy to Render
 - Set environment variables in deployment platforms
 
 ---
@@ -128,16 +122,6 @@ Uses **Dijkstra's Algorithm** to find:
 3. Commit changes: `git commit -m 'Add feature'`
 4. Push branch: `git push origin feature-name`
 5. Open Pull Request
-
----
-
-## 📬 Contact
-
-**Made by Harshit Singh**
-
-- 📧 Email: harshitsingh789123@gmail.com
-- 💻 GitHub: [harshitsingh4321](https://github.com/harshitsingh4321)
-
 ---
 
 ## 📄 License
