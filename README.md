@@ -8,7 +8,7 @@
 
 **A simple web application to plan routes between stations in Indore using Dijkstra's Algorithm**
 
-[🚀 Live Demo](https://indore-route.vercel.app)
+[🚀 Live Demo](https://path-finder-gbim-nt6wpxjh9-vishakha-gautams-projects.vercel.app/)
 
 </div>
 
