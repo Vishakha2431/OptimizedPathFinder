@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import stationRoutes from './routes/stationRoutes.js';
 import shortestPathRoutes from './routes/shortestPath.js';
+import bfsPathRoutes from './routes/bfsPath.js';
 
 dotenv.config();
 
@@ -40,22 +41,30 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ✅ Enhanced MongoDB connection with retry logic
+// MongoDB Atlas connection
 const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000,
-      maxPoolSize: 10,
-      retryWrites: true,
-      w: 'majority'
-    });
-    console.log('✅ MongoDB connected successfully');
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err);
-    // Exit process with failure
+  const uri = process.env.MONGO_URI;
+
+  if (!uri) {
+    console.error("❌ MONGO_URI missing — add it to backend/.env");
     process.exit(1);
+  }
+
+  try {
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 15000,
+    });
+    console.log("✅ MongoDB connected:", mongoose.connection.name);
+  } catch (err) {
+    console.error("❌ MongoDB connection error:", err.message);
+    console.error(`
+Atlas fix:
+  1. Network Access → Add IP → Allow from anywhere (0.0.0.0/0)
+  2. Copy connection string from Atlas → Connect → Drivers
+  3. Paste into backend/.env as MONGO_URI (include /indore-pathfinder before ?)
+  4. If querySrv ECONNREFUSED: use mongodb:// (non-srv) string from Atlas
+`);
+    console.warn("⚠️ Server stays up but API calls need DB — fix MONGO_URI and restart.");
   }
 };
 
@@ -107,6 +116,7 @@ app.get('/health', (req, res) => {
 // ✅ API Routes
 app.use('/api/stations', stationRoutes);
 app.use('/api/shortest-path', shortestPathRoutes);
+app.use('/api/bfs-path', bfsPathRoutes);
 
 // ✅ 404 Handler
 app.use((req, res) => {

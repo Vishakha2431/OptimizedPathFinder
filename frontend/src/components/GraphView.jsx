@@ -1,43 +1,96 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import ReactFlow, { MiniMap, Controls } from 'react-flow-renderer';
+/**
+ * Interactive graph of locations and routes (React Flow).
+ * Highlights the active route (Dijkstra or BFS).
+ */
+import React, { useMemo } from "react";
+import ReactFlow, { MiniMap, Controls, Background } from "react-flow-renderer";
+import "react-flow-renderer/dist/style.css";
+import "react-flow-renderer/dist/theme-default.css";
 
-const GraphView = () => {
-  const [elements, setElements] = useState([]);
+const GraphView = ({ stations = [], highlightPath = [], algorithm }) => {
+  const pathSet = useMemo(
+    () => new Set((highlightPath || []).map(String)),
+    [highlightPath]
+  );
 
-  useEffect(() => {
-    axios.get('http://localhost:5000/stations')  // Assuming your backend is at port 5000
-      .then(res => {
-        const stations = res.data;
+  const { nodes, edges } = useMemo(() => {
+    const nodeList = (stations || []).map((station, index) => {
+      const id = String(station._id);
+      const onPath = pathSet.has(id);
+      const pathColor = algorithm === "BFS" ? "#a78bfa" : "#34d399";
+      return {
+        id,
+        data: { label: station.name },
+        position: { x: 60 + (index % 4) * 180, y: 60 + Math.floor(index / 4) * 130 },
+        style: {
+          background: onPath ? "#1e3a5f" : "#1e293b",
+          color: "#f1f5f9",
+          border: onPath ? `2px solid ${pathColor}` : "1px solid #475569",
+          borderRadius: 10,
+          padding: "10px 14px",
+          fontWeight: onPath ? 700 : 500,
+          fontSize: 13,
+        },
+      };
+    });
 
-        const nodes = stations.map((station, index) => ({
-          id: station._id,
-          data: { label: station.name },
-          position: { x: 100 + index * 150, y: 100 }
-        }));
+    const edgeList = [];
+    const seen = new Set();
 
-        const edges = [];
-        stations.forEach(station => {
-          station.connections.forEach(conn => {
-            edges.push({
-              id: `${station._id}-${conn.to}`,
-              source: station._id,
-              target: conn.to,
-              label: `${conn.distance} km / ₹${conn.cost}`,
-              animated: true,
-            });
-          });
+    (stations || []).forEach((station) => {
+      const sourceId = String(station._id);
+      (station.connections || []).forEach((conn) => {
+        const targetId = String(conn.station?._id || conn.station || "");
+        if (!targetId) return;
+
+        const key = [sourceId, targetId].sort().join("-");
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const pathIndexA = highlightPath.findIndex((p) => String(p) === sourceId);
+        const pathIndexB = highlightPath.findIndex((p) => String(p) === targetId);
+        const onPath =
+          pathIndexA >= 0 &&
+          pathIndexB >= 0 &&
+          Math.abs(pathIndexA - pathIndexB) === 1;
+
+        const edgeColor = algorithm === "BFS" ? "#a78bfa" : "#34d399";
+
+        edgeList.push({
+          id: key,
+          source: sourceId,
+          target: targetId,
+          label: `${conn.distance} km · ₹${conn.cost}`,
+          animated: onPath,
+          style: {
+            stroke: onPath ? edgeColor : "#64748b",
+            strokeWidth: onPath ? 3 : 1.5,
+          },
+          labelStyle: { fill: "#94a3b8", fontSize: 11 },
         });
-
-        setElements([...nodes, ...edges]);
       });
-  }, []);
+    });
+
+    return { nodes: nodeList, edges: edgeList };
+  }, [stations, pathSet, highlightPath, algorithm]);
+
+  if (!stations.length) {
+    return (
+      <p className="empty-hint">
+        Add locations and connections to see the network graph.
+      </p>
+    );
+  }
 
   return (
-    <div style={{ height: 500 }}>
-      <ReactFlow elements={elements}>
-        <MiniMap />
+    <div className="graph-wrap">
+      <ReactFlow nodes={nodes} edges={edges} fitView>
+        <Background color="#334155" gap={20} />
         <Controls />
+        <MiniMap
+          nodeColor={(n) => (pathSet.has(n.id) ? "#34d399" : "#475569")}
+          maskColor="rgba(15, 23, 42, 0.8)"
+        />
       </ReactFlow>
     </div>
   );

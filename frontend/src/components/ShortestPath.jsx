@@ -1,6 +1,6 @@
 // ShortestPath.jsx
 import React, { useState, useEffect } from "react";
-import { getStations } from "./api";
+import { getStations, getShortestPath } from "../api";
 
 export default function ShortestPath() {
   const [stations, setStations] = useState([]);
@@ -14,8 +14,7 @@ export default function ShortestPath() {
 
   const findShortestPath = async () => {
     if (!from || !to) return alert("Select both stations");
-    const res = await fetch(`/api/shortest-path?from=${from}&to=${to}`);
-    const data = await res.json();
+    const data = await getShortestPath(from, to, "distance");
     setPathResult(data);
   };
 
@@ -49,15 +48,15 @@ export default function ShortestPath() {
 
       {pathResult && (
         <div style={{ marginTop: 20 }}>
-          <h3>Shortest Distance: {pathResult.distance} km</h3>
+          <h3>Shortest Distance: {pathResult.totalDistance} km</h3>
           <p>
             Path:{" "}
-            {pathResult.path.map((p, idx) => (
+            {pathResult.pathDetails?.map((p, idx) => (
               <span key={p.id}>
                 {p.name}
-                {idx < pathResult.path.length - 1 ? " ➡️ " : ""}
+                {idx < pathResult.pathDetails.length - 1 ? " → " : ""}
               </span>
-            ))}
+            )) || null}
           </p>
         </div>
       )}

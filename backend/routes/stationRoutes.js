@@ -1,9 +1,12 @@
+/**
+ * Station (location) CRUD and connection routes for Indore Route Pathfinder.
+ */
 import express from "express";
 import Station from "../models/Station.js";
 
 const router = express.Router();
 
-// GET /api/stations - fetch all stations with connected station names
+/** GET /api/stations — list all locations with populated connection names */
 router.get("/", async (req, res) => {
   try {
     const stations = await Station.find().populate("connections.station", "name _id");
@@ -17,11 +20,12 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/stations - create a new station
+/** POST /api/stations — create a new location */
 router.post("/", async (req, res) => {
   const { name, coordinates } = req.body;
+  const normalizedName = typeof name === "string" ? name.trim() : "";
 
-  if (!name) {
+  if (!normalizedName) {
     return res.status(400).json({ 
       error: "Station name is required",
       example: { name: "Station A", coordinates: { lat: 22.7196, lng: 75.8577 } }
@@ -29,7 +33,9 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const existingStation = await Station.findOne({ name });
+    const existingStation = await Station.findOne({
+      name: { $regex: `^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+    });
     if (existingStation) {
       return res.status(400).json({ 
         error: "Station already exists",
@@ -38,7 +44,7 @@ router.post("/", async (req, res) => {
     }
 
     const station = new Station({ 
-      name, 
+      name: normalizedName,
       coordinates: coordinates || null,
       connections: [] 
     });
@@ -54,9 +60,11 @@ router.post("/", async (req, res) => {
   }
 });
 
-// POST /api/stations/connect - connect two stations
+/** POST /api/stations/connect — bidirectional edge between two locations */
 router.post("/connect", async (req, res) => {
   const { firstStation, secondStation, distance, cost } = req.body;
+  const parsedDistance = Number(distance);
+  const parsedCost = Number(cost);
 
   // Validate inputs
   if (!firstStation || !secondStation) {
@@ -71,7 +79,7 @@ router.post("/connect", async (req, res) => {
     });
   }
 
-  if (!distance || !cost || distance <= 0 || cost <= 0) {
+  if (!Number.isFinite(parsedDistance) || !Number.isFinite(parsedCost) || parsedDistance <= 0 || parsedCost <= 0) {
     return res.status(400).json({ 
       error: "Distance and cost must be positive numbers",
       received: { distance, cost }
@@ -111,12 +119,12 @@ router.post("/connect", async (req, res) => {
     await Promise.all([
       Station.findByIdAndUpdate(firstStation, {
         $push: {
-          connections: { station: secondStation, distance, cost }
+          connections: { station: secondStation, distance: parsedDistance, cost: parsedCost }
         }
       }),
       Station.findByIdAndUpdate(secondStation, {
         $push: {
-          connections: { station: firstStation, distance, cost }
+          connections: { station: firstStation, distance: parsedDistance, cost: parsedCost }
         }
       })
     ]);
@@ -124,7 +132,7 @@ router.post("/connect", async (req, res) => {
     res.json({ 
       success: true,
       message: "Stations connected successfully",
-      connection: { firstStation, secondStation, distance, cost }
+      connection: { firstStation, secondStation, distance: parsedDistance, cost: parsedCost }
     });
   } catch (err) {
     console.error("POST /api/stations/connect error:", err);
@@ -132,6 +140,75 @@ router.post("/connect", async (req, res) => {
       error: "Failed to connect stations",
       details: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
+  }
+});
+
+/** PUT /api/stations/:id — update location name */
+router.put("/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  const normalizedName = typeof name === "string" ? name.trim() : "";
+
+  if (!normalizedName) {
+    return res.status(400).json({ error: "Station name is required" });
+  }
+
+  try {
+    const station = await Station.findById(id);
+    if (!station) {
+      return res.status(404).json({ error: "Station not found" });
+    }
+
+    const duplicate = await Station.findOne({
+      _id: { $ne: id },
+      name: {
+        $regex: `^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+        $options: "i",
+      },
+    });
+    if (duplicate) {
+      return res.status(400).json({ error: "Another location with this name already exists" });
+    }
+
+    station.name = normalizedName;
+    await station.save();
+
+    const updated = await Station.findById(id).populate(
+      "connections.station",
+      "name _id"
+    );
+    res.json({ success: true, station: updated });
+  } catch (err) {
+    console.error("PUT /api/stations/:id error:", err);
+    res.status(500).json({ error: "Failed to update station" });
+  }
+});
+
+/** DELETE /api/stations/:id — remove location and its links from DB */
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const station = await Station.findById(id);
+    if (!station) {
+      return res.status(404).json({ error: "Station not found" });
+    }
+
+    // Remove this station from every other station's connections
+    await Station.updateMany(
+      { "connections.station": id },
+      { $pull: { connections: { station: id } } }
+    );
+
+    await Station.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: `Deleted "${station.name}" and removed its connections`,
+    });
+  } catch (err) {
+    console.error("DELETE /api/stations/:id error:", err);
+    res.status(500).json({ error: "Failed to delete station" });
   }
 });
 
